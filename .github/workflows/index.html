@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Háblame">
+<meta name="theme-color" content="#FAF7F2">
+<title>Háblame · Comunicación AAC</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap');
+
+  :root {
+    --bg: #FAF7F2;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-muted: #6B6B6B;
+    --border: #E8E4DC;
+    --focus: #FFB300;
+    --shadow: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+
+    /* Clave Fitzgerald (estándar en CAA / AAC) */
+    --c-verb: #2E7D32;       /* verbos / acciones */
+    --c-feeling: #1565C0;    /* descriptores / sentimientos */
+    --c-food: #E65100;       /* sustantivos / comida */
+    --c-people: #F9A825;     /* personas */
+    --c-social: #C2185B;     /* social */
+    --c-body: #5D4037;       /* cuerpo / baño */
+    --c-place: #6A1B9A;      /* lugares */
+    --c-emergency: #C62828;  /* emergencia */
+
+    --button-size: 140px;
+    --dwell-time: 1500ms;
+    --radius: 18px;
+  }
+
+  body.hc {
+    --bg: #000000;
+    --surface: #1a1a1a;
+    --text: #FFFFFF;
+    --text-muted: #FFEB3B;
+    --border: #FFEB3B;
+    --focus: #FFEB3B;
+    --shadow: none;
+    --shadow-lg: none;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    height: 100dvh;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  /* ===== BARRA DE FRASE ===== */
+  .sentence-bar {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 8px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    min-height: 110px;
+    box-shadow: var(--shadow);
+  }
+
+  .sentence {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    overflow-x: auto;
+    padding: 4px 8px;
+    scrollbar-width: thin;
+  }
+
+  .sentence-empty {
+    color: var(--text-muted);
+    font-size: 20px;
+    font-style: italic;
+  }
+
+  .word-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 12px;
+    min-width: 78px;
+    font-weight: 700;
+    flex-shrink: 0;
+    animation: pop 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .word-chip .ico { font-size: 28px; line-height: 1; }
+  .word-chip .lbl { font-size: 15px; margin-top: 2px; text-align: center; }
+
+  @keyframes pop {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .ctrl-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 6px 12px;
+    min-width: 86px;
+    cursor: pointer;
+    transition: transform 100ms;
+  }
+  .ctrl-btn .ico { font-size: 30px; line-height: 1; }
+  .ctrl-btn .lbl { margin-top: 4px; }
+  .ctrl-btn:active { transform: scale(0.94); }
+  .ctrl-btn.speak {
+    background: var(--c-verb); color: white; border-color: var(--c-verb);
+    box-shadow: 0 4px 12px rgba(46,125,50,0.3);
+  }
+  .ctrl-btn.clear { background: var(--surface); }
+  .ctrl-btn.back { background: var(--surface); }
+
+  /* ===== CUADRÍCULA ===== */
+  .grid-area {
+    overflow-y: auto;
+    padding: 4px;
+    scroll-behavior: smooth;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--button-size), 1fr));
+    gap: 14px;
+  }
+
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    background: var(--surface);
+    border: 4px solid var(--tile-color, var(--border));
+    border-radius: var(--radius);
+    padding: 10px;
+    font-family: inherit;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 120ms, box-shadow 120ms;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .tile:active { transform: scale(0.95); }
+
+  .tile .ico {
+    font-size: clamp(40px, 7vw, 72px);
+    line-height: 1;
+    pointer-events: none;
+  }
+  .tile .lbl {
+    font-size: clamp(15px, 1.8vw, 20px);
+    margin-top: 6px;
+    text-align: center;
+    line-height: 1.15;
+    pointer-events: none;
+  }
+
+  .tile.cat-quiero      { --tile-color: var(--c-verb); }
+  .tile.cat-sentir      { --tile-color: var(--c-feeling); }
+  .tile.cat-comida      { --tile-color: var(--c-food); }
+  .tile.cat-familia     { --tile-color: var(--c-people); }
+  .tile.cat-bano        { --tile-color: var(--c-body); }
+  .tile.cat-dolor       { --tile-color: var(--c-body); }
+  .tile.cat-escuela     { --tile-color: var(--c-place); }
+  .tile.cat-sino        { --tile-color: var(--c-social); }
+  .tile.cat-emergencia  { --tile-color: var(--c-emergency); }
+
+  /* Indicador de foco/dwell/escaneo */
+  .tile.focused {
+    box-shadow: 0 0 0 8px var(--focus), var(--shadow-lg);
+    transform: translateY(-3px);
+    z-index: 2;
+  }
+  .tile.focused::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 8px;
+    background: var(--focus);
+    animation: dwellFill var(--dwell-time) linear forwards;
+  }
+  .tile.scan-active {
+    box-shadow: 0 0 0 8px var(--focus), var(--shadow-lg);
+    transform: scale(1.04);
+    z-index: 2;
+  }
+  @keyframes dwellFill {
+    from { width: 0%; }
+    to { width: 100%; }
+  }
+
+  /* ===== BARRA INFERIOR ===== */
+  .bottom-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 4px;
+  }
+
+  .breadcrumb {
+    flex: 1;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding-left: 8px;
+  }
+
+  .icon-btn {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--text);
+    box-shadow: var(--shadow);
+    transition: transform 100ms;
+  }
+  .icon-btn:active { transform: scale(0.94); }
+  .icon-btn.emergency {
+    background: var(--c-emergency);
+    color: white;
+    border-color: var(--c-emergency);
+    animation: subtlePulse 3s ease-in-out infinite;
+  }
+  @keyframes subtlePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(198,40,40,0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(198,40,40,0); }
+  }
+
+  /* ===== MODAL ===== */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    color: var(--text);
+  }
+
+  .modal h2 { font-size: 26px; margin-bottom: 8px; }
+  .modal .hint { color: var(--text-muted); margin-bottom: 16px; font-size: 14px; }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .setting-row label { font-weight: 700; font-size: 17px; flex: 1 1 200px; }
+  .setting-row input[type=range] { flex: 1; min-width: 180px; accent-color: var(--c-verb); }
+  .setting-row .value { font-weight: 700; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+  .setting-row select {
+    font-family: inherit;
+    font-size: 15px;
+    padding: 8px 10px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    flex: 1 1 200px;
+  }
+
+  .switch {
+    position: relative;
+    width: 60px;
+    height: 32px;
+    background: var(--border);
+    border-radius: 32px;
+    cursor: pointer;
+    transition: background 200ms;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 26px;
+    height: 26px;
+    background: white;
+    border-radius: 50%;
+    transition: left 200ms;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .switch.on { background: var(--c-verb); }
+  .switch.on::after { left: 31px; }
+
+  .close-btn {
+    margin-top: 20px;
+    width: 100%;
+    padding: 16px;
+    background: var(--c-verb);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  /* Focus visible para teclado / switch */
+  .tile:focus-visible,
+  .ctrl-btn:focus-visible,
+  .icon-btn:focus-visible {
+    outline: 4px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Reducir movimiento si el usuario lo prefiere */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- BARRA DE FRASE -->
+  <div class="sentence-bar" role="region" aria-label="Frase en construcción">
+    <div class="sentence" id="sentence" aria-live="polite">
+      <span class="sentence-empty" id="sentenceEmpty">Toca o mira un botón para empezar…</span>
+    </div>
+    <button class="ctrl-btn back" onclick="backspace()" aria-label="Borrar última palabra">
+      <span class="ico">⌫</span><span class="lbl">Borrar</span>
+    </button>
+    <button class="ctrl-btn clear" onclick="clearSentence()" aria-label="Limpiar toda la frase">
+      <span class="ico">🗑️</span><span class="lbl">Limpiar</span>
+    </button>
+    <button class="ctrl-btn speak" onclick="speakSentence()" aria-label="Leer la frase en voz alta">
+      <span class="ico">🔊</span><span class="lbl">Leer</span>
+    </button>
+  </div>
+
+  <!-- CUADRÍCULA -->
+  <main class="grid-area" role="main">
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <!-- BARRA INFERIOR -->
+  <div class="bottom-bar">
+    <button class="icon-btn" onclick="goHome()" aria-label="Inicio - Volver a categorías">🏠</button>
+    <span class="breadcrumb" id="breadcrumb">Categorías</span>
+    <button class="icon-btn" onclick="openSettings()" aria-label="Ajustes">⚙️</button>
+    <button class="icon-btn emergency" onclick="emergency()" aria-label="Emergencia">🚨</button>
+  </div>
+</div>
+
+<!-- MODAL DE AJUSTES -->
+<div class="modal-backdrop" id="settingsModal" role="dialog" aria-label="Ajustes">
+  <div class="modal">
+    <h2>⚙️ Ajustes</h2>
+    <p class="hint">Ajusta la aplicación a las necesidades del niño. Los cambios se guardan automáticamente.</p>
+
+    <div class="setting-row">
+      <label for="sizeSlider">Tamaño de botones</label>
+      <input type="range" id="sizeSlider" min="100" max="240" step="10" value="140">
+      <span class="value" id="sizeValue">140 px</span>
+    </div>
+
+    <div class="setting-row">
+      <label for="dwellSlider">Tiempo de permanencia (dwell)</label>
+      <input type="range" id="dwellSlider" min="500" max="4000" step="100" value="1500">
+      <span class="value" id="dwellValue">1.5 s</span>
+    </div>
+
+    <div class="setting-row">
+      <label>Selección por permanencia (dwell del ratón/cursor)</label>
+      <div class="switch" id="dwellSwitch" onclick="toggleDwell()" role="switch" aria-checked="false" tabindex="0"></div>
+    </div>
+
+    <div class="setting-row">
+      <label>Modo escaneo (para acceso por switch)</label>
+      <div class="switch" id="scanSwitch" onclick="toggleScan()" role="switch" aria-checked="false" tabindex="0"></div>
+    </div>
+
+    <div class="setting-row">
+      <label for="scanSpeedSlider">Velocidad de escaneo</label>
+      <input type="range" id="scanSpeedSlider" min="800" max="3500" step="100" value="1500">
+      <span class="value" id="scanSpeedValue">1.5 s</span>
+    </div>
+
+    <div class="setting-row">
+      <label>Modo alto contraste</label>
+      <div class="switch" id="hcSwitch" onclick="toggleHC()" role="switch" aria-checked="false" tabindex="0"></div>
+    </div>
+
+    <div class="setting-row">
+      <label>Leer palabra al seleccionarla</label>
+      <div class="switch" id="speakOnSelectSwitch" onclick="toggleSpeakOnSelect()" role="switch" aria-checked="true" tabindex="0"></div>
+    </div>
+
+    <div class="setting-row">
+      <label for="voiceSelect">Voz</label>
+      <select id="voiceSelect"></select>
+    </div>
+
+    <div class="setting-row">
+      <label for="rateSlider">Velocidad de voz</label>
+      <input type="range" id="rateSlider" min="0.5" max="1.5" step="0.05" value="0.9">
+      <span class="value" id="rateValue">0.9x</span>
+    </div>
+
+    <button class="close-btn" onclick="closeSettings()">Cerrar</button>
+  </div>
+</div>
+
+<script>
+  // ============================================================
+  //  HÁBLAME — Aplicación AAC en español
+  //  Licencia MIT  ·  Sin internet, sin rastreo, sin cuentas
+  // ============================================================
+
+  // ===== VOCABULARIO POR DEFECTO =====
+  // Editable más adelante; los padres pueden modificarlo.
+  const DEFAULT_VOCAB = {
+    quiero: {
+      label: 'Quiero', icon: '🙋', color: 'cat-quiero',
+      items: [
+        { lbl: 'agua', ico: '💧' },
+        { lbl: 'comer', ico: '🍴' },
+        { lbl: 'jugar', ico: '🎮' },
+        { lbl: 'descansar', ico: '🛏️' },
+        { lbl: 'salir', ico: '🚪' },
+        { lbl: 'un abrazo', ico: '🤗' },
+        { lbl: 'escuchar música', ico: '🎵' },
+        { lbl: 'mi tablet', ico: '📱' },
+        { lbl: 'leer un libro', ico: '📚' },
+        { lbl: 'ver la tele', ico: '📺' },
+        { lbl: 'ir al parque', ico: '🌳' },
+        { lbl: 'estar solo', ico: '🧘' }
+      ]
+    },
+    sentir: {
+      label: 'Me siento', icon: '😊', color: 'cat-sentir',
+      items: [
+        { lbl: 'feliz', ico: '😄' },
+        { lbl: 'triste', ico: '😢' },
+        { lbl: 'enojado', ico: '😠' },
+        { lbl: 'cansado', ico: '😴' },
+        { lbl: 'asustado', ico: '😨' },
+        { lbl: 'aburrido', ico: '😑' },
+        { lbl: 'emocionado', ico: '🤩' },
+        { lbl: 'tranquilo', ico: '😌' },
+        { lbl: 'frustrado', ico: '😤' },
+        { lbl: 'con frío', ico: '🥶' },
+        { lbl: 'con calor', ico: '🥵' },
+        { lbl: 'enfermo', ico: '🤒' }
+      ]
+    },
+    comida: {
+      label: 'Comida', icon: '🍎', color: 'cat-comida',
+      items: [
+        { lbl: 'agua', ico: '💧' },
+        { lbl: 'leche', ico: '🥛' },
+        { lbl: 'jugo', ico: '🧃' },
+        { lbl: 'pan', ico: '🍞' },
+        { lbl: 'manzana', ico: '🍎' },
+        { lbl: 'plátano', ico: '🍌' },
+        { lbl: 'arroz', ico: '🍚' },
+        { lbl: 'pollo', ico: '🍗' },
+        { lbl: 'pizza', ico: '🍕' },
+        { lbl: 'pasta', ico: '🍝' },
+        { lbl: 'galletas', ico: '🍪' },
+        { lbl: 'helado', ico: '🍦' }
+      ]
+    },
+    familia: {
+      label: 'Familia', icon: '👨\u200d👩\u200d👧', color: 'cat-familia',
+      items: [
+        { lbl: 'mamá', ico: '👩' },
+        { lbl: 'papá', ico: '👨' },
+        { lbl: 'hermano', ico: '👦' },
+        { lbl: 'hermana', ico: '👧' },
+        { lbl: 'abuela', ico: '👵' },
+        { lbl: 'abuelo', ico: '👴' },
+        { lbl: 'tía', ico: '🧑' },
+        { lbl: 'tío', ico: '🧔' },
+        { lbl: 'amigo', ico: '🧑\u200d🤝\u200d🧑' },
+        { lbl: 'maestra', ico: '👩\u200d🏫' },
+        { lbl: 'doctor', ico: '👨\u200d⚕️' },
+        { lbl: 'yo', ico: '🙂' }
+      ]
+    },
+    bano: {
+      label: 'Baño', icon: '🚽', color: 'cat-bano',
+      items: [
+        { lbl: 'pipí', ico: '💧' },
+        { lbl: 'popó', ico: '💩' },
+        { lbl: 'lavarme las manos', ico: '🧼' },
+        { lbl: 'cepillarme los dientes', ico: '🪥' },
+        { lbl: 'bañarme', ico: '🛁' },
+        { lbl: 'papel', ico: '🧻' },
+        { lbl: 'ya terminé', ico: '✅' },
+        { lbl: 'necesito ayuda', ico: '🙋' }
+      ]
+    },
+    dolor: {
+      label: 'Dolor', icon: '🤕', color: 'cat-dolor',
+      items: [
+        { lbl: 'me duele la cabeza', ico: '🤕' },
+        { lbl: 'me duele la panza', ico: '🤢' },
+        { lbl: 'me duele la garganta', ico: '😷' },
+        { lbl: 'me duele el oído', ico: '👂' },
+        { lbl: 'me duele un diente', ico: '🦷' },
+        { lbl: 'me duele aquí', ico: '👆' },
+        { lbl: 'me siento mal', ico: '🤒' },
+        { lbl: 'necesito medicina', ico: '💊' }
+      ]
+    },
+    escuela: {
+      label: 'Escuela', icon: '🏫', color: 'cat-escuela',
+      items: [
+        { lbl: 'maestra', ico: '👩\u200d🏫' },
+        { lbl: 'amigo', ico: '🧑\u200d🤝\u200d🧑' },
+        { lbl: 'libro', ico: '📚' },
+        { lbl: 'lápiz', ico: '✏️' },
+        { lbl: 'tarea', ico: '📝' },
+        { lbl: 'recreo', ico: '🤸' },
+        { lbl: 'baño', ico: '🚽' },
+        { lbl: 'no entiendo', ico: '❓' },
+        { lbl: 'ya terminé', ico: '✅' },
+        { lbl: 'necesito ayuda', ico: '🙋' }
+      ]
+    },
+    sino: {
+      label: 'Sí / No', icon: '👍', color: 'cat-sino',
+      items: [
+        { lbl: 'sí', ico: '✅' },
+        { lbl: 'no', ico: '❌' },
+        { lbl: 'tal vez', ico: '🤔' },
+        { lbl: 'no sé', ico: '🤷' },
+        { lbl: 'me gusta', ico: '❤️' },
+        { lbl: 'no me gusta', ico: '💔' },
+        { lbl: 'por favor', ico: '🙏' },
+        { lbl: 'gracias', ico: '😊' },
+        { lbl: 'hola', ico: '👋' },
+        { lbl: 'adiós', ico: '✋' }
+      ]
+    },
+    emergencia: {
+      label: 'Emergencia', icon: '🚨', color: 'cat-emergencia',
+      items: [
+        { lbl: 'ayuda, por favor', ico: '🆘' },
+        { lbl: 'me siento muy mal', ico: '🤒' },
+        { lbl: 'llamen a mamá', ico: '👩' },
+        { lbl: 'llamen a papá', ico: '👨' },
+        { lbl: 'no puedo respirar', ico: '😮\u200d💨' },
+        { lbl: 'me caí', ico: '🤕' },
+        { lbl: 'llamen al doctor', ico: '👨\u200d⚕️' },
+        { lbl: 'llamen una ambulancia', ico: '🚑' }
+      ]
+    }
+  };
+
+  // ===== ALMACENAMIENTO LOCAL (con detección segura) =====
+  const Store = {
+    canPersist: false,
+    init() {
+      try {
+        localStorage.setItem('_test', '1');
+        localStorage.removeItem('_test');
+        this.canPersist = true;
+      } catch (e) { this.canPersist = false; }
+    },
+    get(k, def) {
+      if (!this.canPersist) return def;
+      try {
+        const v = localStorage.getItem('hablame_' + k);
+        return v ? JSON.parse(v) : def;
+      } catch (e) { return def; }
+    },
+    set(k, v) {
+      if (!this.canPersist) return;
+      try { localStorage.setItem('hablame_' + k, JSON.stringify(v)); } catch (e) {}
+    }
+  };
+  Store.init();
+
+  // ===== ESTADO DE LA APP =====
+  const state = {
+    vocab: Store.get('vocab', DEFAULT_VOCAB),
+    sentence: [],
+    view: 'home',
+    settings: Store.get('settings', {
+      buttonSize: 140,
+      dwellTime: 1500,
+      dwellOn: false,
+      scanOn: false,
+      scanSpeed: 1500,
+      highContrast: false,
+      speakOnSelect: true,
+      voiceURI: null,
+      rate: 0.9
+    })
+  };
+
+  // ===== TEXT-TO-SPEECH =====
+  let voices = [];
+  function loadVoices() {
+    voices = (speechSynthesis.getVoices() || []).filter(v => v.lang.toLowerCase().startsWith('es'));
+    const sel = document.getElementById('voiceSelect');
+    sel.innerHTML = '';
+    if (voices.length === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = 'No hay voces en español disponibles';
+      sel.appendChild(opt);
+      return;
+    }
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.voiceURI;
+      opt.textContent = `${v.name} (${v.lang})`;
+      sel.appendChild(opt);
+    });
+    if (state.settings.voiceURI && voices.some(v => v.voiceURI === state.settings.voiceURI)) {
+      sel.value = state.settings.voiceURI;
+    } else {
+      state.settings.voiceURI = voices[0].voiceURI;
+    }
+    sel.onchange = e => {
+      state.settings.voiceURI = e.target.value;
+      Store.set('settings', state.settings);
+    };
+  }
+  if ('speechSynthesis' in window) {
+    speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+  }
+
+  function speak(text) {
+    if (!text || !('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'es-ES';
+    u.rate = state.settings.rate;
+    const voice = voices.find(v => v.voiceURI === state.settings.voiceURI);
+    if (voice) u.voice = voice;
+    speechSynthesis.speak(u);
+  }
+
+  // ===== RENDERIZADO =====
+  function render() {
+    document.body.classList.toggle('hc', state.settings.highContrast);
+    document.documentElement.style.setProperty('--button-size', state.settings.buttonSize + 'px');
+    document.documentElement.style.setProperty('--dwell-time', state.settings.dwellTime + 'ms');
+    renderSentence();
+    renderGrid();
+    renderBreadcrumb();
+    if (state.settings.scanOn) startScan();
+    else stopScan();
+  }
+
+  function renderSentence() {
+    const s = document.getElementById('sentence');
+    if (state.sentence.length === 0) {
+      s.innerHTML = '<span class="sentence-empty">Toca o mira un botón para empezar…</span>';
+      return;
+    }
+    s.innerHTML = state.sentence.map(w =>
+      `<div class="word-chip"><span class="ico">${w.ico}</span><span class="lbl">${escapeHtml(w.lbl)}</span></div>`
+    ).join('');
+    // Auto-scroll al final
+    s.scrollLeft = s.scrollWidth;
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+
+    if (state.view === 'home') {
+      Object.entries(state.vocab).forEach(([id, cat]) => {
+        const tile = makeTile(cat.color, cat.icon, cat.label, () => openCategory(id));
+        grid.appendChild(tile);
+      });
+    } else {
+      const cat = state.vocab[state.view];
+      cat.items.forEach(item => {
+        const tile = makeTile(cat.color, item.ico, item.lbl, () => addWord(item));
+        grid.appendChild(tile);
+      });
+    }
+  }
+
+  function makeTile(colorClass, icon, label, onActivate) {
+    const tile = document.createElement('button');
+    tile.className = `tile ${colorClass}`;
+    tile.innerHTML = `<span class="ico">${icon}</span><span class="lbl">${escapeHtml(label)}</span>`;
+    tile.setAttribute('aria-label', label);
+    tile.onclick = onActivate;
+    attachDwell(tile);
+    return tile;
+  }
+
+  function renderBreadcrumb() {
+    const b = document.getElementById('breadcrumb');
+    b.textContent = state.view === 'home' ? 'Categorías' : state.vocab[state.view].label;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  // ===== ACCIONES =====
+  function openCategory(id) {
+    state.view = id;
+    render();
+    if (state.settings.speakOnSelect) speak(state.vocab[id].label);
+  }
+
+  function goHome() {
+    state.view = 'home';
+    render();
+  }
+
+  function addWord(item) {
+    state.sentence.push(item);
+    renderSentence();
+    if (state.settings.speakOnSelect) speak(item.lbl);
+  }
+
+  function backspace() {
+    state.sentence.pop();
+    renderSentence();
+  }
+
+  function clearSentence() {
+    state.sentence = [];
+    renderSentence();
+  }
+
+  function speakSentence() {
+    if (state.sentence.length === 0) return;
+    speak(state.sentence.map(w => w.lbl).join(' '));
+  }
+
+  function emergency() {
+    state.view = 'emergencia';
+    render();
+  }
+
+  // ===== DWELL CONTROL (puntero/mirada con ratón) =====
+  let dwellTimer = null;
+  function attachDwell(el) {
+    el.addEventListener('pointerenter', () => {
+      if (!state.settings.dwellOn) return;
+      el.classList.add('focused');
+      clearTimeout(dwellTimer);
+      dwellTimer = setTimeout(() => {
+        el.classList.remove('focused');
+        el.click();
+      }, state.settings.dwellTime);
+    });
+    el.addEventListener('pointerleave', () => {
+      el.classList.remove('focused');
+      clearTimeout(dwellTimer);
+    });
+  }
+
+  // ===== MODO ESCANEO (para Switch Access) =====
+  let scanIndex = 0;
+  let scanTimer = null;
+  function getScanTargets() {
+    return [...document.querySelectorAll('.tile, .ctrl-btn, .icon-btn')];
+  }
+  function startScan() {
+    stopScan();
+    scanIndex = 0;
+    highlightScan();
+    scanTimer = setInterval(() => {
+      const targets = getScanTargets();
+      const cur = targets[scanIndex];
+      if (cur) cur.classList.remove('scan-active');
+      scanIndex = (scanIndex + 1) % targets.length;
+      highlightScan();
+    }, state.settings.scanSpeed);
+  }
+  function stopScan() {
+    clearInterval(scanTimer);
+    scanTimer = null;
+    document.querySelectorAll('.scan-active').forEach(el => el.classList.remove('scan-active'));
+  }
+  function highlightScan() {
+    const targets = getScanTargets();
+    const cur = targets[scanIndex];
+    if (!cur) return;
+    cur.classList.add('scan-active');
+    cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function selectScan() {
+    const targets = getScanTargets();
+    const cur = targets[scanIndex];
+    if (cur) cur.click();
+  }
+
+  // Atajos de teclado / switch (cualquier tecla activa el botón resaltado en modo escaneo;
+  // Espacio = leer, Backspace = borrar, Escape = limpiar)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { clearSentence(); return; }
+    if (e.key === 'Backspace') { backspace(); e.preventDefault(); return; }
+    if (e.key === ' ' && !state.settings.scanOn) { speakSentence(); e.preventDefault(); return; }
+    if (state.settings.scanOn) {
+      e.preventDefault();
+      selectScan();
+    }
+  });
+
+  // ===== AJUSTES =====
+  function openSettings() {
+    const m = document.getElementById('settingsModal');
+    m.classList.add('open');
+    document.getElementById('sizeSlider').value = state.settings.buttonSize;
+    document.getElementById('sizeValue').textContent = state.settings.buttonSize + ' px';
+    document.getElementById('dwellSlider').value = state.settings.dwellTime;
+    document.getElementById('dwellValue').textContent = (state.settings.dwellTime/1000).toFixed(1) + ' s';
+    document.getElementById('scanSpeedSlider').value = state.settings.scanSpeed;
+    document.getElementById('scanSpeedValue').textContent = (state.settings.scanSpeed/1000).toFixed(1) + ' s';
+    document.getElementById('rateSlider').value = state.settings.rate;
+    document.getElementById('rateValue').textContent = state.settings.rate + 'x';
+    document.getElementById('dwellSwitch').classList.toggle('on', state.settings.dwellOn);
+    document.getElementById('scanSwitch').classList.toggle('on', state.settings.scanOn);
+    document.getElementById('hcSwitch').classList.toggle('on', state.settings.highContrast);
+    document.getElementById('speakOnSelectSwitch').classList.toggle('on', state.settings.speakOnSelect);
+  }
+
+  function closeSettings() {
+    document.getElementById('settingsModal').classList.remove('open');
+    Store.set('settings', state.settings);
+    render();
+  }
+
+  document.getElementById('sizeSlider').oninput = e => {
+    state.settings.buttonSize = +e.target.value;
+    document.getElementById('sizeValue').textContent = state.settings.buttonSize + ' px';
+    document.documentElement.style.setProperty('--button-size', state.settings.buttonSize + 'px');
+  };
+  document.getElementById('dwellSlider').oninput = e => {
+    state.settings.dwellTime = +e.target.value;
+    document.getElementById('dwellValue').textContent = (state.settings.dwellTime/1000).toFixed(1) + ' s';
+    document.documentElement.style.setProperty('--dwell-time', state.settings.dwellTime + 'ms');
+  };
+  document.getElementById('scanSpeedSlider').oninput = e => {
+    state.settings.scanSpeed = +e.target.value;
+    document.getElementById('scanSpeedValue').textContent = (state.settings.scanSpeed/1000).toFixed(1) + ' s';
+    if (state.settings.scanOn) startScan();
+  };
+  document.getElementById('rateSlider').oninput = e => {
+    state.settings.rate = +e.target.value;
+    document.getElementById('rateValue').textContent = state.settings.rate + 'x';
+  };
+
+  function toggleDwell() {
+    state.settings.dwellOn = !state.settings.dwellOn;
+    document.getElementById('dwellSwitch').classList.toggle('on', state.settings.dwellOn);
+  }
+  function toggleScan() {
+    state.settings.scanOn = !state.settings.scanOn;
+    document.getElementById('scanSwitch').classList.toggle('on', state.settings.scanOn);
+    if (state.settings.scanOn) startScan();
+    else stopScan();
+  }
+  function toggleHC() {
+    state.settings.highContrast = !state.settings.highContrast;
+    document.getElementById('hcSwitch').classList.toggle('on', state.settings.highContrast);
+    document.body.classList.toggle('hc', state.settings.highContrast);
+  }
+  function toggleSpeakOnSelect() {
+    state.settings.speakOnSelect = !state.settings.speakOnSelect;
+    document.getElementById('speakOnSelectSwitch').classList.toggle('on', state.settings.speakOnSelect);
+  }
+
+  // Prevenir gestos de zoom y double-tap en iPad
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+  // Registro del Service Worker (sólo en HTTPS / GitHub Pages, falla silenciosamente si no)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+
+  // INICIALIZAR
+  render();
+</script>
+</body>
+</html>
