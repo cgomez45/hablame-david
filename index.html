@@ -703,7 +703,7 @@
     if (state.settings.voiceURI && voices.some(v => v.voiceURI === state.settings.voiceURI)) {
       sel.value = state.settings.voiceURI;
     } else {
-      const maleVoice = voices.find(v => v.name.toLowerCase().includes('us') || v.name.toLowerCase().includes('male'));
+      const maleVoice = voices.find(v => v.name.toLowerCase().includes('us') || v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('unidos') || v.lang.toLowerCase() === 'es-us');
       state.settings.voiceURI = (maleVoice || voices[0]).voiceURI;
     }
     sel.onchange = e => {
