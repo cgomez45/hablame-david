@@ -277,6 +277,7 @@
   /* ===== MODAL ===== */
   .modal-backdrop {
     position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
     inset: 0;
     background: rgba(0,0,0,0.6);
     display: none;
@@ -385,7 +386,7 @@
   body.eye-on #eye-badge { display:flex; }
   body.eye-on .tile:hover, body.eye-on .cat-btn:hover { box-shadow: 0 0 0 4px var(--focus); }
   .btn-wrap { position:relative; display:inline-block; }
-  .dwell-ring { position:absolute; inset:-4px; border-radius:inherit; pointer-events:none; z-index:10; }
+  .dwell-ring { position:absolute; top:-4px;right:-4px;bottom:-4px;left:-4px;inset:-4px; border-radius:inherit; pointer-events:none; z-index:10; }
   .dwell-ring svg { width:100%; height:100%; transform:rotate(-90deg); }
   .dwell-ring circle { fill:none; stroke:var(--focus); stroke-width:5; stroke-linecap:round; stroke-dasharray:314; stroke-dashoffset:314; transition:none; }
 </style>
@@ -900,8 +901,32 @@
   }
 
 
+  function openSettings() {
+    document.getElementById('sizeSlider').value = state.settings.buttonSize;
+    document.getElementById('sizeValue').textContent = state.settings.buttonSize + ' px';
+    document.getElementById('dwellSlider').value = state.settings.dwellTime;
+    document.getElementById('dwellValue').textContent = (state.settings.dwellTime/1000).toFixed(1) + ' s';
+    document.getElementById('scanSpeedSlider').value = state.settings.scanSpeed;
+    document.getElementById('scanSpeedValue').textContent = (state.settings.scanSpeed/1000).toFixed(1) + ' s';
+    document.getElementById('rateSlider').value = state.settings.rate;
+    document.getElementById('rateValue').textContent = state.settings.rate + 'x';
+    document.getElementById('dwellSwitch').classList.toggle('on', !!state.settings.dwellOn);
+    document.getElementById('dwellSwitch').setAttribute('aria-checked', String(!!state.settings.dwellOn));
+    document.getElementById('scanSwitch').classList.toggle('on', !!state.settings.scanOn);
+    document.getElementById('scanSwitch').setAttribute('aria-checked', String(!!state.settings.scanOn));
+    document.getElementById('hcSwitch').classList.toggle('on', !!state.settings.highContrast);
+    document.getElementById('hcSwitch').setAttribute('aria-checked', String(!!state.settings.highContrast));
+    document.getElementById('speakOnSelectSwitch').classList.toggle('on', !!state.settings.speakOnSelect);
+    document.getElementById('speakOnSelectSwitch').setAttribute('aria-checked', String(!!state.settings.speakOnSelect));
+    var modal = document.getElementById('settingsModal');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
   function closeSettings() {
-    document.getElementById('settingsModal').classList.remove('open');
+    var modal = document.getElementById('settingsModal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
     Store.set('settings', state.settings);
     render();
   }
@@ -937,7 +962,7 @@
       const er = document.getElementById('eyeDwellRow'); if(er) er.style.display='none';
       document.body.classList.remove('eye-on');
     }
-    localStorage.setItem('hablame-settings', JSON.stringify(state.settings));
+    Store.set('settings', state.settings);
   }
   function toggleEye() {
     state.settings.eyeOn = !state.settings.eyeOn;
@@ -951,24 +976,41 @@
       const ds = document.getElementById('dwellSwitch');
       if(ds){ds.classList.remove('on');ds.setAttribute('aria-checked','false');}
     }
-    localStorage.setItem('hablame-settings', JSON.stringify(state.settings));
+    Store.set('settings', state.settings);
   }
   function toggleScan() {
     state.settings.scanOn = !state.settings.scanOn;
     document.getElementById('scanSwitch').classList.toggle('on', state.settings.scanOn);
+    document.getElementById('scanSwitch').setAttribute('aria-checked', String(state.settings.scanOn));
     if (state.settings.scanOn) startScan();
     else stopScan();
+    Store.set('settings', state.settings);
   }
   function toggleHC() {
     state.settings.highContrast = !state.settings.highContrast;
     document.getElementById('hcSwitch').classList.toggle('on', state.settings.highContrast);
+    document.getElementById('hcSwitch').setAttribute('aria-checked', String(state.settings.highContrast));
     document.body.classList.toggle('hc', state.settings.highContrast);
+    Store.set('settings', state.settings);
   }
   function toggleSpeakOnSelect() {
     state.settings.speakOnSelect = !state.settings.speakOnSelect;
     document.getElementById('speakOnSelectSwitch').classList.toggle('on', state.settings.speakOnSelect);
+    document.getElementById('speakOnSelectSwitch').setAttribute('aria-checked', String(state.settings.speakOnSelect));
+    Store.set('settings', state.settings);
   }
 
+  // Keyboard support for switch toggles (cross-browser accessibility)
+  document.querySelectorAll('.switch').forEach(function(sw) {
+    sw.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sw.click(); }
+    });
+  });
+  // Click outside modal to close
+  document.getElementById('settingsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSettings();
+  });
+  document.getElementById('settingsModal').setAttribute('aria-hidden', 'true');
   // Prevenir gestos de zoom y double-tap en iPad
   document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
   document.addEventListener('gesturestart', e => e.preventDefault());
@@ -988,9 +1030,9 @@
   if(_eds) _eds.addEventListener('input', function(){
     state.settings.eyeDwellTime = parseInt(this.value);
     document.getElementById('eyeDwellValue').textContent = (this.value/1000).toFixed(1)+' s';
-    localStorage.setItem('hablame-settings', JSON.stringify(state.settings));
+    Store.set('settings', state.settings);
   });
-  (function(){ const s=JSON.parse(localStorage.getItem('hablame-settings')||'{}');
+  (function(){ const s=Store.get('settings', {});
     if(s.eyeOn){ state.settings.eyeOn=true; state.settings.eyeDwellTime=s.eyeDwellTime||1200;
       const sw=document.getElementById('eyeSwitch'); if(sw){sw.classList.add('on');sw.setAttribute('aria-checked','true');}
       const er=document.getElementById('eyeDwellRow'); if(er) er.style.display='';
