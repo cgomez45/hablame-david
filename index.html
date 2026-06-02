@@ -703,7 +703,8 @@
     if (state.settings.voiceURI && voices.some(v => v.voiceURI === state.settings.voiceURI)) {
       sel.value = state.settings.voiceURI;
     } else {
-      state.settings.voiceURI = voices[0].voiceURI;
+      const maleVoice = voices.find(v => v.name.toLowerCase().includes('us') || v.name.toLowerCase().includes('male'));
+      state.settings.voiceURI = (maleVoice || voices[0]).voiceURI;
     }
     sel.onchange = e => {
       state.settings.voiceURI = e.target.value;
@@ -720,10 +721,41 @@
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'es-ES';
+    u.pitch = 0.7;
     u.rate = state.settings.rate;
     const voice = voices.find(v => v.voiceURI === state.settings.voiceURI);
     if (voice) u.voice = voice;
     speechSynthesis.speak(u);
+  }
+
+  // ===== ESCANEO =====
+  let _scanTimer = null, _scanIdx = 0;
+  function startScan() {
+    stopScan();
+    function step() {
+      const tiles = Array.from(document.querySelectorAll('#grid .tile'));
+      if (!tiles.length) { _scanTimer = setTimeout(step, state.settings.scanSpeed); return; }
+      tiles.forEach(t => t.classList.remove('scan-active'));
+      _scanIdx = _scanIdx % tiles.length;
+      tiles[_scanIdx].classList.add('scan-active');
+      _scanIdx++;
+      _scanTimer = setTimeout(step, state.settings.scanSpeed);
+    }
+    step();
+    document.addEventListener('keydown', _scanSelect);
+  }
+  function stopScan() {
+    clearTimeout(_scanTimer);
+    _scanTimer = null;
+    _scanIdx = 0;
+    document.querySelectorAll('.scan-active').forEach(t => t.classList.remove('scan-active'));
+    document.removeEventListener('keydown', _scanSelect);
+  }
+  function _scanSelect(e) {
+    if (e.key === ' ' || e.key === 'Enter') {
+      const active = document.querySelector('.scan-active');
+      if (active) active.click();
+    }
   }
 
   // ===== RENDERIZADO =====
@@ -734,8 +766,8 @@
     renderSentence();
     renderGrid();
     renderBreadcrumb();
-    if (state.settings.scanOn) startScan();
-    else stopScan();
+    if (state.settings.scanOn) { if (typeof startScan === 'function') startScan(); }
+    else { if (typeof stopScan === 'function') stopScan(); }
   }
 
   function renderSentence() {
