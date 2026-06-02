@@ -379,9 +379,19 @@
       transition-duration: 0.01ms !important;
     }
   }
+
+  /* EYE-TRACKING */
+  #eye-badge { position:fixed; top:8px; right:8px; background:#1565C0; color:#fff; border-radius:20px; padding:4px 12px; font-size:13px; font-weight:700; z-index:200; display:none; align-items:center; }
+  body.eye-on #eye-badge { display:flex; }
+  body.eye-on .tile:hover, body.eye-on .cat-btn:hover { box-shadow: 0 0 0 4px var(--focus); }
+  .btn-wrap { position:relative; display:inline-block; }
+  .dwell-ring { position:absolute; inset:-4px; border-radius:inherit; pointer-events:none; z-index:10; }
+  .dwell-ring svg { width:100%; height:100%; transform:rotate(-90deg); }
+  .dwell-ring circle { fill:none; stroke:var(--focus); stroke-width:5; stroke-linecap:round; stroke-dasharray:314; stroke-dashoffset:314; transition:none; }
 </style>
 </head>
 <body>
+<div id="eye-badge">👁️ Eye Tracker ON</div>
 <div class="app">
   <!-- BARRA DE FRASE -->
   <div class="sentence-bar" role="region" aria-label="Frase en construcción">
@@ -468,7 +478,17 @@
       <span class="value" id="rateValue">0.9x</span>
     </div>
 
-    <button class="close-btn" onclick="closeSettings()">Cerrar</button>
+    
+    <div class="row">
+      <label for="eyeSwitch">👁️ Seguimiento ocular (Eye Tracker)</label>
+      <div class="switch" id="eyeSwitch" onclick="toggleEye()" role="switch" aria-checked="false" tabindex="0"></div>
+    </div>
+    <div class="row" id="eyeDwellRow" style="display:none">
+      <label for="eyeDwellSlider">⏱ Permanencia ocular</label>
+      <input type="range" id="eyeDwellSlider" min="500" max="3000" step="100" value="1200">
+      <span class="value" id="eyeDwellValue">1.2 s</span>
+    </div>
+<button class="close-btn" onclick="closeSettings()">Cerrar</button>
   </div>
 </div>
 
@@ -652,7 +672,7 @@
     settings: Store.get('settings', {
       buttonSize: 140,
       dwellTime: 1500,
-      dwellOn: false,
+      dwellOn: false, eyeOn: false, eyeDwellTime: 1200,
       scanOn: false,
       scanSpeed: 1500,
       highContrast: false,
@@ -811,86 +831,41 @@
   // ===== DWELL CONTROL (puntero/mirada con ratón) =====
   let dwellTimer = null;
   function attachDwell(el) {
-    el.addEventListener('pointerenter', () => {
-      if (!state.settings.dwellOn) return;
-      el.classList.add('focused');
-      clearTimeout(dwellTimer);
-      dwellTimer = setTimeout(() => {
-        el.classList.remove('focused');
-        el.click();
-      }, state.settings.dwellTime);
-    });
-    el.addEventListener('pointerleave', () => {
-      el.classList.remove('focused');
-      clearTimeout(dwellTimer);
-    });
-  }
-
-  // ===== MODO ESCANEO (para Switch Access) =====
-  let scanIndex = 0;
-  let scanTimer = null;
-  function getScanTargets() {
-    return [...document.querySelectorAll('.tile, .ctrl-btn, .icon-btn')];
-  }
-  function startScan() {
-    stopScan();
-    scanIndex = 0;
-    highlightScan();
-    scanTimer = setInterval(() => {
-      const targets = getScanTargets();
-      const cur = targets[scanIndex];
-      if (cur) cur.classList.remove('scan-active');
-      scanIndex = (scanIndex + 1) % targets.length;
-      highlightScan();
-    }, state.settings.scanSpeed);
-  }
-  function stopScan() {
-    clearInterval(scanTimer);
-    scanTimer = null;
-    document.querySelectorAll('.scan-active').forEach(el => el.classList.remove('scan-active'));
-  }
-  function highlightScan() {
-    const targets = getScanTargets();
-    const cur = targets[scanIndex];
-    if (!cur) return;
-    cur.classList.add('scan-active');
-    cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }
-  function selectScan() {
-    const targets = getScanTargets();
-    const cur = targets[scanIndex];
-    if (cur) cur.click();
-  }
-
-  // Atajos de teclado / switch (cualquier tecla activa el botón resaltado en modo escaneo;
-  // Espacio = leer, Backspace = borrar, Escape = limpiar)
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { clearSentence(); return; }
-    if (e.key === 'Backspace') { backspace(); e.preventDefault(); return; }
-    if (e.key === ' ' && !state.settings.scanOn) { speakSentence(); e.preventDefault(); return; }
-    if (state.settings.scanOn) {
-      e.preventDefault();
-      selectScan();
+    const wrap = document.createElement('div');
+    wrap.className = 'btn-wrap';
+    el.parentNode.insertBefore(wrap, el);
+    wrap.appendChild(el);
+    const ring = document.createElement('div');
+    ring.className = 'dwell-ring';
+    ring.innerHTML = '<svg viewBox="0 0 104 104"><circle cx="52" cy="52" r="50"/><\/svg>';
+    wrap.appendChild(ring);
+    let timer = null, active = false;
+    function startDwell() {
+      if (!state.settings.dwellOn && !state.settings.eyeOn) return;
+      if (active) return; active = true;
+      const ms = state.settings.eyeOn ? (state.settings.eyeDwellTime||1200)
+        : parseInt(getComputedStyle(document.documentElement).getPropertyValue('--dwell-time'));
+      const circ = ring.querySelector('circle');
+      circ.style.transition = 'none'; circ.style.strokeDashoffset = '314';
+      void circ.getBoundingClientRect();
+      circ.style.transition = 'stroke-dashoffset '+ms+'ms linear';
+      circ.style.strokeDashoffset = '0';
+      ring.classList.add('active');
+      timer = setTimeout(() => {
+        if (active) { active=false; ring.classList.remove('active'); circ.style.transition='none'; circ.style.strokeDashoffset='314'; el.click(); }
+      }, ms);
     }
-  });
-
-  // ===== AJUSTES =====
-  function openSettings() {
-    const m = document.getElementById('settingsModal');
-    m.classList.add('open');
-    document.getElementById('sizeSlider').value = state.settings.buttonSize;
-    document.getElementById('sizeValue').textContent = state.settings.buttonSize + ' px';
-    document.getElementById('dwellSlider').value = state.settings.dwellTime;
-    document.getElementById('dwellValue').textContent = (state.settings.dwellTime/1000).toFixed(1) + ' s';
-    document.getElementById('scanSpeedSlider').value = state.settings.scanSpeed;
-    document.getElementById('scanSpeedValue').textContent = (state.settings.scanSpeed/1000).toFixed(1) + ' s';
-    document.getElementById('rateSlider').value = state.settings.rate;
-    document.getElementById('rateValue').textContent = state.settings.rate + 'x';
-    document.getElementById('dwellSwitch').classList.toggle('on', state.settings.dwellOn);
-    document.getElementById('scanSwitch').classList.toggle('on', state.settings.scanOn);
-    document.getElementById('hcSwitch').classList.toggle('on', state.settings.highContrast);
-    document.getElementById('speakOnSelectSwitch').classList.toggle('on', state.settings.speakOnSelect);
+    function cancelDwell() {
+      if (!active) return; active=false; clearTimeout(timer);
+      ring.classList.remove('active');
+      const circ=ring.querySelector('circle'); circ.style.transition='none'; circ.style.strokeDashoffset='314';
+    }
+    el.addEventListener('pointerenter', startDwell);
+    el.addEventListener('pointerleave', cancelDwell);
+    el.addEventListener('pointercancel', cancelDwell);
+    el.addEventListener('touchstart', cancelDwell, {passive:true});
   }
+
 
   function closeSettings() {
     document.getElementById('settingsModal').classList.remove('open');
@@ -921,6 +896,29 @@
   function toggleDwell() {
     state.settings.dwellOn = !state.settings.dwellOn;
     document.getElementById('dwellSwitch').classList.toggle('on', state.settings.dwellOn);
+    document.getElementById('dwellSwitch').setAttribute('aria-checked', state.settings.dwellOn);
+    if (state.settings.dwellOn && state.settings.eyeOn) {
+      state.settings.eyeOn = false;
+      const sw = document.getElementById('eyeSwitch');
+      if(sw){sw.classList.remove('on');sw.setAttribute('aria-checked','false');}
+      const er = document.getElementById('eyeDwellRow'); if(er) er.style.display='none';
+      document.body.classList.remove('eye-on');
+    }
+    localStorage.setItem('hablame-settings', JSON.stringify(state.settings));
+  }
+  function toggleEye() {
+    state.settings.eyeOn = !state.settings.eyeOn;
+    const sw = document.getElementById('eyeSwitch');
+    sw.classList.toggle('on', state.settings.eyeOn);
+    sw.setAttribute('aria-checked', state.settings.eyeOn);
+    const er = document.getElementById('eyeDwellRow'); if(er) er.style.display=state.settings.eyeOn?'':'none';
+    document.body.classList.toggle('eye-on', state.settings.eyeOn);
+    if (state.settings.eyeOn && state.settings.dwellOn) {
+      state.settings.dwellOn = false;
+      const ds = document.getElementById('dwellSwitch');
+      if(ds){ds.classList.remove('on');ds.setAttribute('aria-checked','false');}
+    }
+    localStorage.setItem('hablame-settings', JSON.stringify(state.settings));
   }
   function toggleScan() {
     state.settings.scanOn = !state.settings.scanOn;
@@ -951,6 +949,23 @@
 
   // INICIALIZAR
   render();
+
+  // Eye dwell slider
+  const _eds = document.getElementById('eyeDwellSlider');
+  if(_eds) _eds.addEventListener('input', function(){
+    state.settings.eyeDwellTime = parseInt(this.value);
+    document.getElementById('eyeDwellValue').textContent = (this.value/1000).toFixed(1)+' s';
+    localStorage.setItem('hablame-settings', JSON.stringify(state.settings));
+  });
+  (function(){ const s=JSON.parse(localStorage.getItem('hablame-settings')||'{}');
+    if(s.eyeOn){ state.settings.eyeOn=true; state.settings.eyeDwellTime=s.eyeDwellTime||1200;
+      const sw=document.getElementById('eyeSwitch'); if(sw){sw.classList.add('on');sw.setAttribute('aria-checked','true');}
+      const er=document.getElementById('eyeDwellRow'); if(er) er.style.display='';
+      document.body.classList.add('eye-on');
+      const sl=document.getElementById('eyeDwellSlider'); if(sl){sl.value=state.settings.eyeDwellTime;
+        const ev=document.getElementById('eyeDwellValue'); if(ev)ev.textContent=(state.settings.eyeDwellTime/1000).toFixed(1)+' s';}
+    }
+  })();
 </script>
 </body>
 </html>
