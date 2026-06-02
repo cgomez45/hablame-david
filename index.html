@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegibleh:wght@400;700&display=swap');
 
   :root {
     --bg: #FAF7F2;
@@ -759,12 +759,14 @@
       Object.entries(state.vocab).forEach(([id, cat]) => {
         const tile = makeTile(cat.color, cat.icon, cat.label, () => openCategory(id));
         grid.appendChild(tile);
+        attachDwell(tile);
       });
     } else {
       const cat = state.vocab[state.view];
       cat.items.forEach(item => {
         const tile = makeTile(cat.color, item.ico, item.lbl, () => addWord(item));
         grid.appendChild(tile);
+        attachDwell(tile);
       });
     }
   }
@@ -775,7 +777,6 @@
     tile.innerHTML = `<span class="ico">${icon}</span><span class="lbl">${escapeHtml(label)}</span>`;
     tile.setAttribute('aria-label', label);
     tile.onclick = onActivate;
-    attachDwell(tile);
     return tile;
   }
 
